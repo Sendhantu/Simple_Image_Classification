@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Classifier</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #f0f2f5;
+      --surface:    #ffffff;
+      --border:     #dde1e9;
+      --border-hi:  #0d9e6e;
+      --accent:     #0d9e6e;
+      --accent2:    #0284c7;
+      --text:       #111827;
+      --muted:      #6b7280;
+      --success-bg: #f0fdf8;
+      --success:    #0d9e6e;
+      --error-bg:   #fff5f5;
+      --error:      #dc2626;
+      --radius:     13px;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, #c8cdd8 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    /* ── Card ──────────────────────────────────────────────────── */
+    .card {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 2.25rem 2rem 2rem;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.07), 0 1px 4px rgba(0,0,0,0.04);
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 19px;
+      background: linear-gradient(135deg, rgba(13,158,110,0.05), rgba(2,132,199,0.03));
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    .header { margin-bottom: 1.75rem; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(13,158,110,0.08);
+      border: 1px solid rgba(13,158,110,0.2);
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin-bottom: 0.8rem;
+    }
+
+    .badge-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    h1 {
+      font-size: 1.55rem;
+      font-weight: 500;
+      line-height: 1.2;
+    }
+
+    h1 em {
+      font-style: normal;
+      background: linear-gradient(100deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── Drop zone ─────────────────────────────────────────────── */
+    .drop-zone {
+      position: relative;
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 1rem;
+      background: #fafbfc;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.drag-over {
+      border-color: var(--border-hi);
+      background: rgba(13,158,110,0.04);
+    }
+
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      background: rgba(13,158,110,0.08);
+      border: 1px solid rgba(13,158,110,0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 0.8rem;
+    }
+
+    .drop-icon svg { stroke: var(--accent); }
+
+    .drop-label {
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .drop-label strong { color: var(--accent); font-weight: 500; }
+
+    .drop-hint {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+      opacity: 0.65;
+    }
+
+    /* ── Preview ───────────────────────────────────────────────── */
+    #preview-wrap {
+      display: none;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+
+    #preview-img {
+      width: 100%;
+      max-height: 180px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .preview-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0.45rem 0.75rem;
+      background: #f5f7fa;
+    }
+
+    .preview-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .preview-name {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Button ────────────────────────────────────────────────── */
+    .btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #ffffff;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 500;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 44px;
+    }
+
+    .btn:hover  { opacity: 0.87; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .spinner {
+      display: none;
+      width: 15px; height: 15px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result card ───────────────────────────────────────────── */
+    .result {
+      margin-top: 1.1rem;
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem;
+      animation: fadeUp 0.35s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(6px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    .result.success {
+      background: var(--success-bg);
+      border: 1px solid rgba(13,158,110,0.2);
+    }
+    .result.error {
+      background: var(--error-bg);
+      border: 1px solid rgba(220,38,38,0.2);
+    }
+
+    .result-tag {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      margin-bottom: 0.25rem;
+    }
+    .result.success .result-tag { color: var(--accent); }
+    .result.error   .result-tag { color: var(--error); }
+
+    .result-value {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .result.error .result-value {
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: var(--error);
+    }
+
+    /* ── Confidence bar ────────────────────────────────────────── */
+    .confidence { margin-top: 0.75rem; }
+
+    .conf-row {
+      display: flex;
+      justify-content: space-between;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .conf-track {
+      height: 4px;
+      border-radius: 999px;
+      background: var(--border);
+      overflow: hidden;
+    }
+
+    .conf-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.6s ease;
+    }
+
+    /* ── Divider ───────────────────────────────────────────────── */
+    .divider {
+      border: none;
+      border-top: 1px solid rgba(13,158,110,0.12);
+      margin: 0.85rem 0 0.75rem;
+    }
+
+    /* ── Alternatives ──────────────────────────────────────────── */
+    .alt-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.55rem;
+    }
+
+    .alt-row:last-child { margin-bottom: 0; }
+
+    .alt-label {
+      font-size: 0.83rem;
+      color: var(--muted);
+    }
+
+    .alt-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .alt-pct {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      min-width: 38px;
+      text-align: right;
+    }
+
+    .alt-bar-track {
+      width: 60px;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--border);
+      overflow: hidden;
+    }
+
+    .alt-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: rgba(13,158,110,0.4);
+    }
+  </style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="badge"><span class="badge-dot"></span>Vision Model</div>
+    <h1>Image <em>Classifier</em></h1>
+  </div>
+
+  <!-- Upload form -->
+  <form id="upload-form" method="POST" action="/predict" enctype="multipart/form-data">
+
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" name="file" id="file-input" accept="image/*" required>
+      <div class="drop-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+      </div>
+      <p class="drop-label"><strong>Click to upload</strong> or drag & drop</p>
+      <p class="drop-hint">PNG · JPG · WEBP — max 5 MB</p>
+    </div>
+
+    <!-- Image preview -->
+    <div id="preview-wrap">
+      <img id="preview-img" src="" alt="Preview">
+      <div class="preview-meta">
+        <span class="preview-dot"></span>
+        <span class="preview-name" id="preview-name"></span>
+      </div>
+    </div>
+
+    <button class="btn" type="submit" id="submit-btn">
+      <span id="btn-text">Run Prediction</span>
+      <span class="spinner" id="spinner"></span>
+    </button>
+
+  </form>
+
+  <!-- Prediction result -->
+  {% if prediction %}
+  <div class="result success">
+
+    <div class="result-tag">Prediction</div>
+    <div class="result-value">{{ prediction }}</div>
+
+    {% if confidence %}
+    <div class="confidence">
+      <div class="conf-row">
+        <span>Confidence</span>
+        <span>{{ confidence }}%</span>
+      </div>
+      <div class="conf-track">
+        <div class="conf-fill" style="width: {{ confidence }}%"></div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if alternatives and alternatives|length > 1 %}
+    <hr class="divider">
+    <div class="result-tag" style="margin-bottom: 0.6rem;">Also possible</div>
+    {% for alt in alternatives[1:] %}
+    <div class="alt-row">
+      <span class="alt-label">{{ alt.label }}</span>
+      <div class="alt-right">
+        <span class="alt-pct">{{ alt.confidence }}%</span>
+        <div class="alt-bar-track">
+          <div class="alt-bar-fill" style="width: {{ [alt.confidence * 2, 100] | min }}%"></div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+  </div>
+  {% endif %}
+
+  <!-- Error -->
+  {% if error %}
+  <div class="result error">
+    <div class="result-tag">Error</div>
+    <div class="result-value">{{ error }}</div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+  const fileInput   = document.getElementById('file-input');
+  const dropZone    = document.getElementById('drop-zone');
+  const previewWrap = document.getElementById('preview-wrap');
+  const previewImg  = document.getElementById('preview-img');
+  const previewName = document.getElementById('preview-name');
+  const form        = document.getElementById('upload-form');
+  const submitBtn   = document.getElementById('submit-btn');
+  const btnText     = document.getElementById('btn-text');
+  const spinner     = document.getElementById('spinner');
+
+  function showPreview(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    previewImg.src = URL.createObjectURL(file);
+    previewName.textContent = file.name;
+    previewWrap.style.display = 'block';
+  }
+
+  fileInput.addEventListener('change', () => showPreview(fileInput.files[0]));
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      showPreview(file);
+    }
+  });
+
+  form.addEventListener('submit', () => {
+    submitBtn.disabled    = true;
+    btnText.textContent   = 'Analysing…';
+    spinner.style.display = 'block';
+  });
+</script>
+</body>
+</html>
